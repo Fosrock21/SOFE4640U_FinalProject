@@ -5,13 +5,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Platform,
-  Modal,
   View,
-  Button,
   Alert,
+  Modal,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { Calendar } from 'react-native-calendars';
 import { styles } from '../styles/AppStyles';
 import colors from '../constants/colors';
 
@@ -22,63 +20,44 @@ export default function SearchScreen({ navigation }) {
   const [checkInDate, setCheckInDate] = React.useState(new Date());
   const [checkOutDate, setCheckOutDate] = React.useState(new Date(new Date().setDate(new Date().getDate() + 1)));
   
-  const [showPicker, setShowPicker] = React.useState(false);
+  const [isPickerVisible, setPickerVisibility] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState(null); // 'checkin' or 'checkout'
-  const [tempDate, setTempDate] = React.useState(new Date());
 
   const handleSearch = () => {
-    // 1. Validate Location
     if (!location.trim()) {
       Alert.alert("Invalid Input", "Please enter a location to search.");
       return;
     }
-
-    // 2. Validate Number of Guests
     const guests = parseInt(numPeople, 10);
     if (isNaN(guests) || guests <= 0) {
       Alert.alert("Invalid Input", "Please enter a valid number of guests.");
       return;
     }
-
-    // 3. Validate Dates (set to midnight to compare dates only)
     const checkIn = new Date(checkInDate.setHours(0, 0, 0, 0));
     const checkOut = new Date(checkOutDate.setHours(0, 0, 0, 0));
     if (checkOut <= checkIn) {
       Alert.alert("Invalid Dates", "Check-out date must be after the check-in date.");
       return;
     }
-
-    // If all validation passes:
     navigation.navigate('List', { location: location.trim() });
   };
 
-  const showDatepickerFor = (target) => {
+  const showDatePickerFor = (target) => {
     setActivePicker(target);
-    setTempDate(target === 'checkin' ? checkInDate : checkOutDate);
-    setShowPicker(true);
+    setPickerVisibility(true);
   };
 
-  const onDateChange = (event, selectedDate) => {
-    const newDate = selectedDate || tempDate;
-    if (Platform.OS === 'android') {
-      setShowPicker(false);
-      if (event.type === 'set') {
-        handleDateSelection(newDate);
-      }
-    } else {
-      // On iOS, the picker is controlled, so we just update the temp state.
-      // The "Done" button will handle the final selection.
-      setTempDate(newDate);
-    }
-  };
-
-  const handleDateSelection = (newDate) => {
+  const onDayPress = (day) => {
+    // Adjust for timezone offset to prevent off-by-one day errors
+    const adjustedTimestamp = day.timestamp + new Date().getTimezoneOffset() * 60 * 1000;
+    const selectedDate = new Date(adjustedTimestamp);
+    
     if (activePicker === 'checkin') {
-      setCheckInDate(newDate);
+      setCheckInDate(selectedDate);
     } else {
-      setCheckOutDate(newDate);
+      setCheckOutDate(selectedDate);
     }
-    setShowPicker(false);
+    setPickerVisibility(false);
   };
 
   return (
@@ -94,33 +73,35 @@ export default function SearchScreen({ navigation }) {
           onChangeText={setLocation}
         />
 
-        <TouchableOpacity style={styles.inputButton} onPress={() => showDatepickerFor('checkin')}>
+        <TouchableOpacity style={styles.inputButton} onPress={() => showDatePickerFor('checkin')}>
           <Text style={styles.inputText}>Check-in: {checkInDate.toLocaleDateString()}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.inputButton} onPress={() => showDatepickerFor('checkout')}>
+        <TouchableOpacity style={styles.inputButton} onPress={() => showDatePickerFor('checkout')}>
           <Text style={styles.inputText}>Check-out: {checkOutDate.toLocaleDateString()}</Text>
         </TouchableOpacity>
 
         <Modal
           transparent={true}
-          animationType="slide"
-          visible={showPicker}
-          onRequestClose={() => setShowPicker(false)}
+          animationType="fade"
+          visible={isPickerVisible}
+          onRequestClose={() => setPickerVisibility(false)}
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
-              <DateTimePicker
-                style={styles.datePicker}
-                value={tempDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={onDateChange}
-                minimumDate={new Date()} // Prevent selecting past dates
+              <Calendar
+                onDayPress={onDayPress}
+                minDate={new Date().toISOString().split('T')[0]}
+                theme={{
+                  backgroundColor: colors.white,
+                  calendarBackground: colors.white,
+                  textSectionTitleColor: colors.primary,
+                  selectedDayBackgroundColor: colors.primary,
+                  selectedDayTextColor: colors.white,
+                  todayTextColor: colors.primary,
+                  arrowColor: colors.primary,
+                }}
               />
-              {Platform.OS === 'ios' && (
-                <Button title="Done" onPress={() => handleDateSelection(tempDate)} />
-              )}
             </View>
           </View>
         </Modal>

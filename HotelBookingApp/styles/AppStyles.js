@@ -216,27 +216,18 @@ export const styles = StyleSheet.create({
     color: colors.white,
   },
 
-  // Modal Styles
+  // Modal Styles for Calendar
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   modalContent: {
     backgroundColor: colors.white,
     borderRadius: 10,
-    padding: 20,
+    padding: 15,
     width: '90%',
     alignItems: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  datePicker: {
-    width: '100%',
-    height: 216, // Standard iOS picker height
   },
 });
