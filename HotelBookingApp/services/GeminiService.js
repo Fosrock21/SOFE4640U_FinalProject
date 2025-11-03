@@ -1,5 +1,5 @@
-const API_KEY = 'YOUR_GEMINI_API_KEY'; // <-- IMPORTANT: REPLACE WITH YOUR NEW, SECRET API KEY
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`;
+const API_KEY = '';
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
 
 export const callGemini = async (messages) => {
   if (API_KEY === 'YOUR_GEMINI_API_KEY') {
@@ -14,10 +14,12 @@ export const callGemini = async (messages) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        contents: messages.map(msg => ({
-          role: msg.role,
-          parts: [{ text: msg.text }],
-        })),
+        contents: messages
+          .filter((msg, index) => !(index === 0 && msg.role === 'model')) // Filter out the initial model message
+          .map(msg => ({
+            role: msg.role,
+            parts: [{ text: msg.text }],
+          })),
         // Optional: Add safety settings if needed
         // safetySettings: [...] 
       }),

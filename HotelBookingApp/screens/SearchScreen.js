@@ -17,8 +17,8 @@ export default function SearchScreen({ navigation }) {
   const [location, setLocation] = React.useState('');
   const [numPeople, setNumPeople] = React.useState('');
 
-  const [checkInDate, setCheckInDate] = React.useState(new Date());
-  const [checkOutDate, setCheckOutDate] = React.useState(new Date(new Date().setDate(new Date().getDate() + 1)));
+  const [checkInDate, setCheckInDate] = React.useState(null);
+  const [checkOutDate, setCheckOutDate] = React.useState(null);
   
   const [isPickerVisible, setPickerVisibility] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState(null); // 'checkin' or 'checkout'
@@ -31,6 +31,10 @@ export default function SearchScreen({ navigation }) {
     const guests = parseInt(numPeople, 10);
     if (isNaN(guests) || guests <= 0) {
       Alert.alert("Invalid Input", "Please enter a valid number of guests.");
+      return;
+    }
+    if (!checkInDate || !checkOutDate) {
+      Alert.alert("Invalid Dates", "Please select both a check-in and check-out date.");
       return;
     }
     const checkIn = new Date(checkInDate.setHours(0, 0, 0, 0));
@@ -74,11 +78,11 @@ export default function SearchScreen({ navigation }) {
         />
 
         <TouchableOpacity style={styles.inputButton} onPress={() => showDatePickerFor('checkin')}>
-          <Text style={styles.inputText}>Check-in: {checkInDate.toLocaleDateString()}</Text>
+          <Text style={checkInDate ? styles.inputText : styles.placeholderText}>{checkInDate ? `Check-in: ${checkInDate.toLocaleDateString()}` : "Check-in: Select a date"}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.inputButton} onPress={() => showDatePickerFor('checkout')}>
-          <Text style={styles.inputText}>Check-out: {checkOutDate.toLocaleDateString()}</Text>
+          <Text style={checkOutDate ? styles.inputText : styles.placeholderText}>{checkOutDate ? `Check-out: ${checkOutDate.toLocaleDateString()}` : "Check-out: Select a date"}</Text>
         </TouchableOpacity>
 
         <Modal
@@ -89,6 +93,12 @@ export default function SearchScreen({ navigation }) {
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setPickerVisibility(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>X</Text>
+              </TouchableOpacity>
               <Calendar
                 onDayPress={onDayPress}
                 minDate={new Date().toISOString().split('T')[0]}

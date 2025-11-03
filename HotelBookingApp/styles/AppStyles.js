@@ -43,6 +43,10 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textPrimary,
   },
+  placeholderText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
   searchButton: {
     backgroundColor: colors.primary,
     padding: 16,
@@ -175,7 +179,7 @@ export const styles = StyleSheet.create({
     maxWidth: '80%',
   },
   userMessage: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryLight,
     alignSelf: 'flex-end',
   },
   modelMessage: {
@@ -229,5 +233,17 @@ export const styles = StyleSheet.create({
     padding: 15,
     width: '90%',
     alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    padding: 5,
+    zIndex: 1,
+  },
+  modalCloseButtonText: {
+    fontSize: 24,
+    color: colors.textSecondary,
+    fontWeight: 'bold',
   },
 });
