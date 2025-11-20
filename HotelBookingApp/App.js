@@ -9,6 +9,7 @@ import ListScreen from './screens/ListScreen';
 import DetailScreen from './screens/DetailScreen';
 import ChatbotScreen from './screens/ChatbotScreen';
 import LoginScreen from './screens/LoginScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 import { auth } from './services/firebaseConfig';
 import colors from './constants/colors';
@@ -49,38 +50,43 @@ export default function App() {
         }}
       >
         {user ? (
-          <>
-            <Stack.Screen
-              name="List"
-              component={ListScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Search"
-              component={SearchScreen}
-              options={{ title: 'Hotel Search' }}
-            />
-            <Stack.Screen
-              name="Details"
-              component={DetailScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Chatbot"
-              component={ChatbotScreen}
-              options={{
-                presentation: 'modal',
-                title: 'Booking Assistant'
-              }}
-            />
-          </>
-        ) : (
-          <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
-        )}
+  <>
+    <Stack.Screen
+      name="List"
+      component={ListScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="Search"
+      component={SearchScreen}
+      options={{ title: 'Hotel Search' }}
+    />
+    <Stack.Screen
+      name="Details"
+      component={DetailScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="Chatbot"
+      component={ChatbotScreen}
+      options={{
+        presentation: 'modal',
+        title: 'Booking Assistant'
+      }}
+    />
+    <Stack.Screen
+      name="Profile"
+      component={ProfileScreen}
+      options={{ headerShown: false }}  // our Figma design has its own header
+    />
+  </>
+) : (
+  <Stack.Screen
+    name="Login"
+    component={LoginScreen}
+    options={{ headerShown: false }}
+  />
+)}
       </Stack.Navigator>
     </NavigationContainer>
   );
