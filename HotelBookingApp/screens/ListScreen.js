@@ -13,14 +13,17 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import * as Location from 'expo-location';
 import { Accelerometer } from 'expo-sensors';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../services/firebaseConfig';
 import colors from '../constants/colors';
-import { MOCK_HOTELS } from '../data/mockData';
+// import { MOCK_HOTELS } from '../data/mockData'; // Keep for reference if needed, but we will fetch from DB
 
 const { width } = Dimensions.get('window');
 
@@ -31,10 +34,36 @@ export default function ListScreen({ navigation }) {
   const [selectedRating, setSelectedRating] = useState(null);
   const [amenities, setAmenities] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredHotels, setFilteredHotels] = useState(MOCK_HOTELS);
+  const [hotels, setHotels] = useState([]);
+  const [filteredHotels, setFilteredHotels] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let newFilteredHotels = MOCK_HOTELS.filter(hotel => {
+    const fetchHotels = async () => {
+      console.log("Fetching hotels from Firestore...");
+      try {
+        const querySnapshot = await getDocs(collection(db, "hotels"));
+        console.log("Snapshot size:", querySnapshot.size);
+        const hotelsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log("Hotels data fetched:", hotelsData.length);
+        setHotels(hotelsData);
+        setFilteredHotels(hotelsData);
+      } catch (error) {
+        console.error("Error fetching hotels: ", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHotels();
+  }, []);
+
+  useEffect(() => {
+    console.log("Filtering hotels. Total:", hotels.length);
+    let newFilteredHotels = hotels.filter(hotel => {
       // Filter by search query
       if (searchQuery) {
         const searchParts = searchQuery.toLowerCase().split(',').map(part => part.trim());
@@ -64,7 +93,7 @@ export default function ListScreen({ navigation }) {
     });
 
     setFilteredHotels(newFilteredHotels);
-  }, [searchQuery, amenities, priceRange, selectedRating]);
+  }, [searchQuery, amenities, priceRange, selectedRating, hotels]);
   const [checkInDate, setCheckInDate] = React.useState(null);
   const [checkOutDate, setCheckOutDate] = React.useState(null);
   const [activePicker, setActivePicker] = React.useState(null);
@@ -214,16 +243,21 @@ export default function ListScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      {loading && (
+        <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', zIndex: 100, backgroundColor: 'rgba(255,255,255,0.8)' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 10, color: colors.primary }}>Loading Hotels...</Text>
+        </View>
+      )}
 
       {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Find Hotels</Text>
-          <Text style={styles.headerSubtitle}>Miami, Florida</Text>
         </View>
         <TouchableOpacity
           style={styles.profileButton}
-          onPress={() => { }} // Profile navigation placeholder
+          onPress={() => navigation.navigate('Profile')}
         >
           <Feather name="user" size={24} color="#FFFFFF" />
         </TouchableOpacity>

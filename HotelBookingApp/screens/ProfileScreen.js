@@ -12,7 +12,8 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { signOut } from 'firebase/auth';
-import { auth } from '../services/firebaseConfig';
+import { collection, doc, writeBatch } from 'firebase/firestore';
+import { auth, db } from '../services/firebaseConfig';
 import colors from '../constants/colors';
 
 export default function ProfileScreen() {

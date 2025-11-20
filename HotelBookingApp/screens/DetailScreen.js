@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import {
   View,
   Text,
@@ -18,7 +19,9 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { callGemini } from '../services/GeminiService';
-import { MOCK_HOTELS } from '../data/mockData';
+// import { MOCK_HOTELS } from '../data/mockData';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../services/firebaseConfig';
 import MapView, { Marker } from 'react-native-maps';
 
 const { width } = Dimensions.get('window');
@@ -26,18 +29,59 @@ const { width } = Dimensions.get('window');
 export default function DetailScreen({ route, navigation }) {
   // Get the hotelId passed from ListScreen
   const { hotelId } = route.params;
-  const hotel = MOCK_HOTELS.find(h => h.id === hotelId);
+  const [hotel, setHotel] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
-  const [showVirtualTour, setShowVirtualTour] = useState(false);
+
+  useEffect(() => {
+    // Enable audio in silent mode for iOS
+    Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+    });
+  }, []);
+
+  useEffect(() => {
+    const fetchHotel = async () => {
+      try {
+        const docRef = doc(db, "hotels", hotelId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          setHotel({ id: docSnap.id, ...docSnap.data() });
+        } else {
+          console.log("No such document!");
+        }
+      } catch (error) {
+        console.error("Error fetching hotel:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHotel();
+  }, [hotelId]);
 
   // Chat State
   const [chatVisible, setChatVisible] = useState(false);
   const [messages, setMessages] = useState([
-    { id: '1', role: 'model', text: `Hello! I can help you with any questions about ${hotel.name}.` }
+    { id: '1', role: 'model', text: "Hello! I can help you with any questions about this hotel." }
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef(null);
+
+  // Update welcome message when hotel is loaded
+  useEffect(() => {
+    if (hotel) {
+      setMessages(prev => {
+        // Only update if it's the initial generic message
+        if (prev.length === 1 && prev[0].text.includes("this hotel")) {
+          return [{ id: '1', role: 'model', text: `Hello! I can help you with any questions about ${hotel.name}.` }];
+        }
+        return prev;
+      });
+    }
+  }, [hotel]);
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
@@ -73,9 +117,24 @@ export default function DetailScreen({ route, navigation }) {
 
   console.log('DetailScreen hotel:', hotel); // Debug log
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#0F172A" />
+      </SafeAreaView>
+    );
+  }
+
   if (!hotel) {
     console.log('No hotel data found!');
-    return null;
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Hotel not found</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20 }}>
+          <Text style={{ color: 'blue' }}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
   }
 
   const amenities = [
@@ -153,20 +212,16 @@ export default function DetailScreen({ route, navigation }) {
           </View>
 
           {/* Virtual Tour Promo Card */}
-          <TouchableOpacity
-            style={styles.promoCard}
-            activeOpacity={0.9}
-            onPress={() => setShowVirtualTour(true)}
-          >
-            <Text style={styles.promoTitle}>Experience in 360°</Text>
-            <Text style={styles.promoText}>
-              Explore every corner of our resort with our immersive virtual tour
-            </Text>
-            <View style={styles.promoButton}>
-              <Ionicons name="play" size={20} color="#0F172A" style={{ marginRight: 8 }} />
-              <Text style={styles.promoButtonText}>Launch Virtual Tour</Text>
-            </View>
-          </TouchableOpacity>
+          {/* Video Player */}
+          <View style={styles.videoContainer}>
+            <Video
+              style={styles.video}
+              source={require('../assets/RitzCarltonToronto.mp4')}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              isLooping
+            />
+          </View>
 
           {/* Amenities */}
           <Text style={styles.sectionTitle}>Amenities</Text>
@@ -268,52 +323,7 @@ export default function DetailScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Virtual Tour Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showVirtualTour}
-        onRequestClose={() => setShowVirtualTour(false)}
-      >
-        <SafeAreaView style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Virtual Tour - 360° View</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowVirtualTour(false)}
-              >
-                <Feather name="x" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
 
-            {/* Modal Content */}
-            <View style={styles.modalContent}>
-              <View style={styles.tourVideoPlaceholder}>
-                <View style={styles.tourPlayIconLarge}>
-                  <Ionicons name="play" size={48} color="white" style={{ marginLeft: 4 }} />
-                </View>
-                <Text style={styles.tourPlaceholderTitle}>360° Virtual Tour</Text>
-                <Text style={styles.tourPlaceholderText}>Interactive video tour would play here</Text>
-              </View>
-
-              {/* Tour Options */}
-              <View style={styles.tourOptions}>
-                <TouchableOpacity style={styles.tourOptionActive}>
-                  <Text style={styles.tourOptionTextActive}>Lobby View</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.tourOption}>
-                  <Text style={styles.tourOptionText}>Room View</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.tourOption}>
-                  <Text style={styles.tourOptionText}>Pool Area</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </SafeAreaView>
-      </Modal>
 
       {/* Chat Modal */}
       <Modal
@@ -714,6 +724,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.2)',
     marginBottom: 24,
+  },
+  videoContainer: {
+    height: 220,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 24,
+    backgroundColor: '#000',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
   },
   tourPlayIconLarge: {
     width: 96,
