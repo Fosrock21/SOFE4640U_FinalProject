@@ -1,9 +1,8 @@
-const API_KEY = '';
+const API_KEY = 'AIzaSyButG94nCT3q8TjsdEbTivagUMcsUgHVc0';
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
 
 export const callGemini = async (messages) => {
   if (API_KEY === 'YOUR_GEMINI_API_KEY') {
-    // Return a canned response if the API key hasn't been replaced.
     return "Hello! I am a hotel booking assistant. Please replace the API key in services/GeminiService.js to enable my full capabilities.";
   }
 
@@ -20,8 +19,6 @@ export const callGemini = async (messages) => {
             role: msg.role,
             parts: [{ text: msg.text }],
           })),
-        // Optional: Add safety settings if needed
-        // safetySettings: [...] 
       }),
     });
 
@@ -32,8 +29,7 @@ export const callGemini = async (messages) => {
     }
 
     const data = await response.json();
-    
-    // Extract the text from the first candidate's content
+
     const botResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!botResponse) {

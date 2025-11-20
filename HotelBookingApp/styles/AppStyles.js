@@ -136,6 +136,36 @@ export const styles = StyleSheet.create({
     lineHeight: 24,
     color: colors.textPrimary,
   },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  mapContainer: {
+    height: 250,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  map: {
+    width: '100%',
+    height: '100%',
+  },
+  videoContainer: {
+    height: 250,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 10,
+    marginBottom: 20,
+    backgroundColor: colors.black,
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
 
   // Chat Screen Styles
   chatContainer: {
