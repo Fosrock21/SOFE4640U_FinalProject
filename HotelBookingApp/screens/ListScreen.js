@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,60 +18,53 @@ import {
 import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import * as Location from 'expo-location';
+import { Accelerometer } from 'expo-sensors';
 import colors from '../constants/colors';
+import { MOCK_HOTELS } from '../data/mockData';
 
 const { width } = Dimensions.get('window');
-
-const hotels = [
-  {
-    id: 1,
-    name: "Ocean Paradise Resort",
-    price: 289,
-    rating: 4.8,
-    image: "https://images.unsplash.com/photo-1729717949712-1c51422693d1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiZWFjaCUyMHJlc29ydCUyMGhvdGVsfGVufDF8fHx8MTc2MzU1MjE5OXww&ixlib=rb-4.1.0&q=80&w=1080",
-    location: "Miami Beach, FL",
-  },
-  {
-    id: 2,
-    name: "Downtown Luxury Hotel",
-    price: 199,
-    rating: 4.6,
-    image: "https://images.unsplash.com/photo-1723465308831-29da05e011f3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBob3RlbCUyMGV4dGVyaW9yfGVufDF8fHx8MTc2MzUzODAyN3ww&ixlib=rb-4.1.0&q=80&w=1080",
-    location: "Downtown Miami, FL",
-  },
-  {
-    id: 3,
-    name: "Skyline Tower Hotel",
-    price: 349,
-    rating: 4.9,
-    image: "https://images.unsplash.com/photo-1694595437436-2ccf5a95591f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaXR5JTIwaG90ZWwlMjBidWlsZGluZ3xlbnwxfHx8fDE3NjM1Njk3Mzd8MA&ixlib=rb-4.1.0&q=80&w=1080",
-    location: "Brickell, Miami, FL",
-  },
-  {
-    id: 4,
-    name: "Boutique Harbor Inn",
-    price: 159,
-    rating: 4.5,
-    image: "https://images.unsplash.com/photo-1654355628827-860147b38be3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBob3RlbCUyMGxvYmJ5fGVufDF8fHx8MTc2MzUxMDU2NXww&ixlib=rb-4.1.0&q=80&w=1080",
-    location: "Bayside, Miami, FL",
-  },
-  {
-    id: 5,
-    name: "Coastal View Suites",
-    price: 229,
-    rating: 4.7,
-    image: "https://images.unsplash.com/photo-1648766378129-11c3d8d0da05?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMHJvb20lMjBiZWR8ZW58MXx8fHwxNzYzNTY5NTQ0fDA&ixlib=rb-4.1.0&q=80&w=1080",
-    location: "South Beach, FL",
-  },
-];
 
 export default function ListScreen({ navigation }) {
   const [likedHotels, setLikedHotels] = useState([]);
   const [guests, setGuests] = useState(2);
-  const [priceRange, setPriceRange] = useState([0, 500]);
+  const [priceRange, setPriceRange] = useState([0, 1000]);
   const [selectedRating, setSelectedRating] = useState(null);
   const [amenities, setAmenities] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filteredHotels, setFilteredHotels] = useState(MOCK_HOTELS);
+
+  useEffect(() => {
+    let newFilteredHotels = MOCK_HOTELS.filter(hotel => {
+      // Filter by search query
+      if (searchQuery) {
+        const searchParts = searchQuery.toLowerCase().split(',').map(part => part.trim());
+        const locationParts = hotel.location.toLowerCase().split(',').map(part => part.trim());
+
+        if (!searchParts.every(part => locationParts.includes(part)) && !hotel.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Filter by amenities
+      if (amenities.length > 0 && !amenities.every(amenity => hotel.amenities.includes(amenity))) {
+        return false;
+      }
+
+      // Filter by price range
+      if (hotel.price < priceRange[0] || hotel.price > priceRange[1]) {
+        return false;
+      }
+
+      // Filter by rating
+      if (selectedRating && hotel.rating < selectedRating) {
+        return false;
+      }
+
+      return true;
+    });
+
+    setFilteredHotels(newFilteredHotels);
+  }, [searchQuery, amenities, priceRange, selectedRating]);
   const [checkInDate, setCheckInDate] = React.useState(null);
   const [checkOutDate, setCheckOutDate] = React.useState(null);
   const [activePicker, setActivePicker] = React.useState(null);
@@ -82,6 +75,62 @@ export default function ListScreen({ navigation }) {
   const [isFilterModalVisible, setFilterModalVisible] = useState(false);
   const [isPriceModalVisible, setPriceModalVisible] = useState(false);
   const [isRatingModalVisible, setRatingModalVisible] = useState(false);
+
+  // Shake Detection
+  const [lastShake, setLastShake] = useState(0);
+
+  React.useEffect(() => {
+    Accelerometer.setUpdateInterval(100);
+
+    const subscription = Accelerometer.addListener(({ x, y, z }) => {
+      const acceleration = Math.sqrt(x * x + y * y + z * z);
+      const now = Date.now();
+
+      // Threshold of 2.5g seems reasonable for a deliberate shake
+      if (acceleration > 2.5) {
+        if (now - lastShake > 2000) { // 2 second debounce
+          setLastShake(now);
+          handleShake();
+        }
+      }
+    });
+
+    return () => subscription && subscription.remove();
+  }, [lastShake]);
+
+  const handleShake = () => {
+    Alert.alert(
+      "Reset Filters?",
+      "We detected a shake! Do you want to clear all your search filters?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: resetFilters
+        }
+      ]
+    );
+  };
+
+  const resetFilters = () => {
+    setGuests(2);
+    setPriceRange([0, 1000]);
+    setSelectedRating(null);
+    setAmenities([]);
+    setSearchQuery('');
+    setCheckInDate(null);
+    setCheckOutDate(null);
+    // Also close any open modals just in case
+    setDateModalVisible(false);
+    setGuestModalVisible(false);
+    setFilterModalVisible(false);
+    setPriceModalVisible(false);
+    setRatingModalVisible(false);
+  };
 
   const toggleLike = (hotelId) => {
     setLikedHotels((prev) =>
@@ -120,7 +169,7 @@ export default function ListScreen({ navigation }) {
   const renderHotelCard = ({ item }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => navigation.navigate('Details', { hotel: item })}
+      onPress={() => navigation.navigate('Details', { hotelId: item.id })}
       activeOpacity={0.9}
     >
       <View style={styles.cardInner}>
@@ -170,10 +219,11 @@ export default function ListScreen({ navigation }) {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Find Hotels</Text>
+          <Text style={styles.headerSubtitle}>Miami, Florida</Text>
         </View>
         <TouchableOpacity
           style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
+          onPress={() => { }} // Profile navigation placeholder
         >
           <Feather name="user" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -205,7 +255,7 @@ export default function ListScreen({ navigation }) {
             if (reverseGeocode.length > 0) {
               let city = reverseGeocode[0].city;
               let region = reverseGeocode[0].region;
-              setSearchQuery(`${city}, ${region}`);
+              setSearchQuery(`${city},${region}`);
             }
           } catch (error) {
             Alert.alert('Error', 'Could not determine your location. Please try again or enter it manually.');
@@ -245,17 +295,17 @@ export default function ListScreen({ navigation }) {
       </View>
       <View style={styles.selectorsRow}>
         <TouchableOpacity
-            style={styles.selectorButton}
-            onPress={() => setGuestModalVisible(true)}
-          >
-            <View style={styles.iconCircle}>
-              <Feather name="users" size={20} color="#0F172A" />
-            </View>
-            <View style={styles.selectorTextContainer}>
-              <Text style={styles.selectorLabel}>Guests</Text>
-              <Text style={styles.selectorValue}>{guests} {guests === 1 ? 'Guest' : 'Guests'}</Text>
-            </View>
-          </TouchableOpacity>
+          style={styles.selectorButton}
+          onPress={() => setGuestModalVisible(true)}
+        >
+          <View style={styles.iconCircle}>
+            <Feather name="users" size={20} color="#0F172A" />
+          </View>
+          <View style={styles.selectorTextContainer}>
+            <Text style={styles.selectorLabel}>Guests</Text>
+            <Text style={styles.selectorValue}>{guests} {guests === 1 ? 'Guest' : 'Guests'}</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Filters */}
@@ -285,12 +335,12 @@ export default function ListScreen({ navigation }) {
 
       {/* Hotels List Header */}
       <View style={styles.listHeader}>
-        <Text style={styles.listCount}>{hotels.length} hotels found</Text>
+        <Text style={styles.listCount}>{filteredHotels.length} results found</Text>
       </View>
 
       {/* Hotels List */}
       <FlatList
-        data={hotels}
+        data={filteredHotels}
         renderItem={renderHotelCard}
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}

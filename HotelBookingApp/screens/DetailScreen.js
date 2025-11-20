@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,67 +10,66 @@ import {
   SafeAreaView,
   Linking,
   Modal,
+  TextInput,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { Feather, MaterialCommunityIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
-import * as Speech from 'expo-speech';
-import { transcribeAudio, callGeminiWithText } from '../services/GeminiService';
+import { callGemini } from '../services/GeminiService';
+import { MOCK_HOTELS } from '../data/mockData';
+import MapView, { Marker } from 'react-native-maps';
 
 const { width } = Dimensions.get('window');
 
 export default function DetailScreen({ route, navigation }) {
-  // Get the hotel object passed from ListScreen
-  const { hotel } = route.params;
+  // Get the hotelId passed from ListScreen
+  const { hotelId } = route.params;
+  const hotel = MOCK_HOTELS.find(h => h.id === hotelId);
   const [isLiked, setIsLiked] = useState(false);
   const [showVirtualTour, setShowVirtualTour] = useState(false);
-  const [recording, setRecording] = useState();
-  const [isRecording, setIsRecording] = useState(false);
-  const [permissionResponse, requestPermission] = Audio.usePermissions();
-  const [geminiResponse, setGeminiResponse] = useState('');
 
-  async function startRecording() {
+  // Chat State
+  const [chatVisible, setChatVisible] = useState(false);
+  const [messages, setMessages] = useState([
+    { id: '1', role: 'model', text: `Hello! I can help you with any questions about ${hotel.name}.` }
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const flatListRef = useRef(null);
+
+  const sendMessage = async () => {
+    if (!inputText.trim()) return;
+
+    const userMessage = { id: Date.now().toString(), role: 'user', text: inputText };
+    const newMessages = [...messages, userMessage];
+
+    setMessages(newMessages);
+    setInputText('');
+    setIsLoading(true);
+
     try {
-      if (permissionResponse.status !== 'granted') {
-        console.log('Requesting permission..');
-        await requestPermission();
-      }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+      // Filter messages to send only role and text to API
+      const apiMessages = newMessages.map(({ role, text }) => ({ role, text }));
+      const responseText = await callGemini(apiMessages);
 
-      console.log('Starting recording..');
-      const { recording } = await Audio.Recording.createAsync( Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
-      );
-      setRecording(recording);
-      setIsRecording(true); // Toggle state
-      console.log('Recording started');
-    } catch (err) {
-      console.error('Failed to start recording', err);
+      const botMessage = { id: (Date.now() + 1).toString(), role: 'model', text: responseText };
+      setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      console.error("Chat Error:", error);
+      const errorMessage = { id: (Date.now() + 1).toString(), role: 'model', text: "Sorry, I'm having trouble connecting right now." };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
-  async function stopRecording() {
-    console.log('Stopping recording..');
-    setIsRecording(false); // Toggle state
-    setRecording(undefined);
-    await recording.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync(
-      {
-        allowsRecordingIOS: false,
-      }
-    );
-    const uri = recording.getURI();
-    console.log('Recording stopped and stored at', uri);
-    
-    const transcription = await transcribeAudio(uri);
-    setGeminiResponse(`You said: ${transcription}`);
-
-    const response = await callGeminiWithText(transcription);
-    setGeminiResponse(response);
-    Speech.speak(response);
-    console.log('Gemini response:', response);
-  }
+  useEffect(() => {
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages, chatVisible]);
 
   console.log('DetailScreen hotel:', hotel); // Debug log
 
@@ -189,13 +188,36 @@ export default function DetailScreen({ route, navigation }) {
               `Experience luxury at its finest at ${hotel.name}. Located in ${hotel.location}, our resort offers breathtaking views, world-class amenities, and exceptional service. Each room is designed with comfort and elegance in mind, featuring modern furnishings and stunning vistas.`}
           </Text>
 
-          {/* AI Assistant Response */}
-          {geminiResponse && (
-            <>
-              <Text style={styles.sectionTitle}>AI Assistant Response</Text>
-              <Text style={styles.description}>{geminiResponse}</Text>
-            </>
-          )}
+          {/* Location Map */}
+          <Text style={styles.sectionTitle}>Location</Text>
+          <View style={styles.mapContainer}>
+            {hotel.latitude && hotel.longitude ? (
+              <MapView
+                style={styles.map}
+                initialRegion={{
+                  latitude: hotel.latitude,
+                  longitude: hotel.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+                scrollEnabled={false}
+              >
+                <Marker
+                  coordinate={{
+                    latitude: hotel.latitude,
+                    longitude: hotel.longitude,
+                  }}
+                  title={hotel.name}
+                  description={hotel.location}
+                />
+              </MapView>
+            ) : (
+              <View style={styles.mapPlaceholder}>
+                <Feather name="map-pin" size={32} color="#94A3B8" />
+                <Text style={styles.mapPlaceholderText}>Map location unavailable</Text>
+              </View>
+            )}
+          </View>
 
           {/* Gallery */}
           <Text style={styles.sectionTitle}>Gallery</Text>
@@ -223,12 +245,12 @@ export default function DetailScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Floating AI Assistant Button */}
+      {/* Floating Chat Button */}
       <TouchableOpacity
-        style={[styles.aiButton, isRecording && styles.aiButtonRecording]}
-        onPress={isRecording ? stopRecording : startRecording}
+        style={styles.aiButton}
+        onPress={() => setChatVisible(true)}
       >
-        <Feather name={isRecording ? "stop-circle" : "mic"} size={28} color="white" />
+        <MaterialCommunityIcons name="robot" size={28} color="white" />
       </TouchableOpacity>
 
       {/* Bottom Bar */}
@@ -292,6 +314,77 @@ export default function DetailScreen({ route, navigation }) {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Chat Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={chatVisible}
+        onRequestClose={() => setChatVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.chatModalOverlay}
+        >
+          <View style={styles.chatModalContainer}>
+            {/* Chat Header */}
+            <View style={styles.chatHeader}>
+              <View style={styles.chatHeaderTitleRow}>
+                <MaterialCommunityIcons name="robot" size={24} color="#6366F1" />
+                <Text style={styles.chatTitle}>AI Assistant</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeChatButton}
+                onPress={() => setChatVisible(false)}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Messages List */}
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={item => item.id}
+              style={styles.messagesList}
+              contentContainerStyle={{ padding: 16 }}
+              renderItem={({ item }) => (
+                <View style={[
+                  styles.messageBubble,
+                  item.role === 'user' ? styles.userMessage : styles.botMessage
+                ]}>
+                  <Text style={[
+                    styles.messageText,
+                    item.role === 'user' ? styles.userMessageText : styles.botMessageText
+                  ]}>{item.text}</Text>
+                </View>
+              )}
+            />
+
+            {/* Input Area */}
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Ask about the hotel..."
+                value={inputText}
+                onChangeText={setInputText}
+                placeholderTextColor="#94A3B8"
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+                onPress={sendMessage}
+                disabled={!inputText.trim() || isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Feather name="send" size={20} color="white" />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -333,50 +426,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 5,
-  },
-  tourButtonContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  virtualTourButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 30,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  playIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  tourTextContainer: {
-    alignItems: 'flex-start',
-  },
-  tourText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  tourSubText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
   },
   contentContainer: {
     backgroundColor: '#FFFFFF',
@@ -558,9 +607,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  aiButtonRecording: {
-    backgroundColor: '#EF4444', // A red color to indicate recording
-  },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -604,8 +650,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+  mapContainer: {
+    height: 200,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 24,
+    backgroundColor: '#F1F5F9',
+  },
+  map: {
+    width: '100%',
+    height: '100%',
+  },
+  mapPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapPlaceholderText: {
+    marginTop: 8,
+    color: '#94A3B8',
+    fontSize: 14,
+  },
 
-  // Modal Styles
+  // Virtual Tour Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
@@ -693,5 +760,110 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+
+  // Chat Modal Styles
+  chatModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  chatModalContainer: {
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  chatHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chatTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0F172A',
+    marginLeft: 12,
+  },
+  closeChatButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  messagesList: {
+    flex: 1,
+  },
+  messageBubble: {
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  userMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#6366F1',
+    borderBottomRightRadius: 4,
+  },
+  botMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  userMessageText: {
+    color: '#FFFFFF',
+  },
+  botMessageText: {
+    color: '#1E293B',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+  inputField: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#0F172A',
+    marginRight: 12,
+    maxHeight: 100,
+  },
+  sendButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#94A3B8',
   },
 });

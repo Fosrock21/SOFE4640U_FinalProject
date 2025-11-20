@@ -1,74 +1,25 @@
-import { GEMINI_API_KEY, SPEECH_TO_TEXT_API_KEY } from '@env';
-import * as FileSystem from 'expo-file-system/legacy';
+import { GEMINI_API_KEY } from '@env';
 
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`;
-const SPEECH_TO_TEXT_API_URL = `https://speech.googleapis.com/v1/speech:recognize?key=${SPEECH_TO_TEXT_API_KEY}`;
+const GEMINI_MODEL = 'gemini-2.0-flash-exp';
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
-export const transcribeAudio = async (audioUri) => {
-  if (SPEECH_TO_TEXT_API_KEY === 'YOUR_SPEECH_TO_TEXT_API_KEY') {
-    return "Please replace the Speech-to-Text API key in services/GeminiService.js to enable audio transcription.";
-  }
-
-  try {
-    const audioBase64 = await FileSystem.readAsStringAsync(audioUri, {
-      encoding: 'base64',
-    });
-
-    const response = await fetch(SPEECH_TO_TEXT_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        config: {
-          encoding: 'MP4',
-          sampleRateHertz: 16000,
-          languageCode: 'en-US',
-        },
-        audio: {
-          content: audioBase64,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("Speech-to-Text API Error:", errorBody);
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    const transcription = data.results?.[0]?.alternatives?.[0]?.transcript;
-
-    if (!transcription) {
-      console.error("Invalid response structure:", data);
-      throw new Error("Failed to parse response from Speech-to-Text API.");
-    }
-
-    return transcription;
-
-  } catch (error) {
-    console.error('Failed to call Speech-to-Text API:', error);
-    return "Sorry, I'm having trouble transcribing the audio. Please try again later.";
-  }
-};
-
-export const callGeminiWithText = async (text) => {
-  if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY') {
+export const callGemini = async (messages) => {
+  if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY') {
+    // Return a canned response if the API key hasn't been replaced.
     return "Hello! I am a hotel booking assistant. Please replace the API key in services/GeminiService.js to enable my full capabilities.";
   }
 
   try {
-    const response = await fetch(GEMINI_API_URL, {
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        contents: [{
-          role: 'user',
-          parts: [{ text: text }],
-        }],
+        contents: messages.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'model', // Gemini uses 'user' and 'model' roles
+          parts: [{ text: msg.text }],
+        })),
       }),
     });
 
@@ -80,6 +31,7 @@ export const callGeminiWithText = async (text) => {
 
     const data = await response.json();
 
+    // Extract the text from the first candidate's content
     const botResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!botResponse) {
