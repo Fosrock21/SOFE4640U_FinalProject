@@ -173,7 +173,7 @@ export default function ListScreen({ navigation }) {
         </View>
         <TouchableOpacity
           style={styles.profileButton}
-          onPress={() => { }} // Profile navigation placeholder
+          onPress={() => navigation.navigate('Profile')}
         >
           <Feather name="user" size={24} color="#FFFFFF" />
         </TouchableOpacity>

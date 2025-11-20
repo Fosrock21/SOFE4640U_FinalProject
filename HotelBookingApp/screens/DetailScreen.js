@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginBottom: 4,
   },
-  priceText: {.
+  priceText: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#0F172A',
