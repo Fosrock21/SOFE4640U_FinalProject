@@ -12,9 +12,13 @@ import {
   Dimensions,
   SafeAreaView,
   Platform,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
+import * as Location from 'expo-location';
+import colors from '../constants/colors';
 
 const { width } = Dimensions.get('window');
 
@@ -68,6 +72,9 @@ export default function ListScreen({ navigation }) {
   const [selectedRating, setSelectedRating] = useState(null);
   const [amenities, setAmenities] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [checkInDate, setCheckInDate] = React.useState(null);
+  const [checkOutDate, setCheckOutDate] = React.useState(null);
+  const [activePicker, setActivePicker] = React.useState(null);
 
   // Modal States
   const [isDateModalVisible, setDateModalVisible] = useState(false);
@@ -90,6 +97,24 @@ export default function ListScreen({ navigation }) {
         ? prev.filter((a) => a !== amenity)
         : [...prev, amenity]
     );
+  };
+
+  const showDatePickerFor = (target) => {
+    setActivePicker(target);
+    setDateModalVisible(true);
+  };
+
+  const onDayPress = (day) => {
+    // Adjust for timezone offset to prevent off-by-one day errors
+    const adjustedTimestamp = day.timestamp + new Date().getTimezoneOffset() * 60 * 1000;
+    const selectedDate = new Date(adjustedTimestamp);
+
+    if (activePicker === 'checkin') {
+      setCheckInDate(selectedDate);
+    } else {
+      setCheckOutDate(selectedDate);
+    }
+    setDateModalVisible(false);
   };
 
   const renderHotelCard = ({ item }) => (
@@ -145,7 +170,6 @@ export default function ListScreen({ navigation }) {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Find Hotels</Text>
-          <Text style={styles.headerSubtitle}>Miami, Florida</Text>
         </View>
         <TouchableOpacity
           style={styles.profileButton}
@@ -165,7 +189,28 @@ export default function ListScreen({ navigation }) {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <TouchableOpacity style={styles.navButton}>
+        <TouchableOpacity style={styles.navButton} onPress={async () => {
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission to access location was denied');
+            return;
+          }
+
+          let location = await Location.getCurrentPositionAsync({});
+          try {
+            let reverseGeocode = await Location.reverseGeocodeAsync({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude
+            });
+            if (reverseGeocode.length > 0) {
+              let city = reverseGeocode[0].city;
+              let region = reverseGeocode[0].region;
+              setSearchQuery(`${city}, ${region}`);
+            }
+          } catch (error) {
+            Alert.alert('Error', 'Could not determine your location. Please try again or enter it manually.');
+          }
+        }}>
           <Feather name="navigation" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -174,29 +219,43 @@ export default function ListScreen({ navigation }) {
       <View style={styles.selectorsRow}>
         <TouchableOpacity
           style={styles.selectorButton}
-          onPress={() => setDateModalVisible(true)}
+          onPress={() => showDatePickerFor('checkin')}
         >
           <View style={styles.iconCircle}>
             <Feather name="calendar" size={20} color="#0F172A" />
           </View>
           <View style={styles.selectorTextContainer}>
-            <Text style={styles.selectorLabel}>Check-in - Check-out</Text>
-            <Text style={styles.selectorValue} numberOfLines={1}>Nov 25 - Nov 28</Text>
+            <Text style={styles.selectorLabel}>Check-in</Text>
+            <Text style={styles.selectorValue} numberOfLines={1}>{checkInDate ? checkInDate.toLocaleDateString() : 'Select Date'}</Text>
           </View>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.selectorButton}
-          onPress={() => setGuestModalVisible(true)}
+          onPress={() => showDatePickerFor('checkout')}
         >
           <View style={styles.iconCircle}>
-            <Feather name="users" size={20} color="#0F172A" />
+            <Feather name="calendar" size={20} color="#0F172A" />
           </View>
           <View style={styles.selectorTextContainer}>
-            <Text style={styles.selectorLabel}>Guests</Text>
-            <Text style={styles.selectorValue}>{guests} {guests === 1 ? 'Guest' : 'Guests'}</Text>
+            <Text style={styles.selectorLabel}>Check-out</Text>
+            <Text style={styles.selectorValue} numberOfLines={1}>{checkOutDate ? checkOutDate.toLocaleDateString() : 'Select Date'}</Text>
           </View>
         </TouchableOpacity>
+      </View>
+      <View style={styles.selectorsRow}>
+        <TouchableOpacity
+            style={styles.selectorButton}
+            onPress={() => setGuestModalVisible(true)}
+          >
+            <View style={styles.iconCircle}>
+              <Feather name="users" size={20} color="#0F172A" />
+            </View>
+            <View style={styles.selectorTextContainer}>
+              <Text style={styles.selectorLabel}>Guests</Text>
+              <Text style={styles.selectorValue}>{guests} {guests === 1 ? 'Guest' : 'Guests'}</Text>
+            </View>
+          </TouchableOpacity>
       </View>
 
       {/* Filters */}
@@ -256,25 +315,19 @@ export default function ListScreen({ navigation }) {
                 <Feather name="x" size={24} color="#0F172A" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 20 }}>
-              <Text style={styles.mockText}>Calendar date picker would be integrated here</Text>
-              <View style={styles.dateDisplayRow}>
-                <View style={styles.dateBox}>
-                  <Text style={styles.dateLabel}>Check-in</Text>
-                  <Text style={styles.dateValue}>Nov 25, 2025</Text>
-                </View>
-                <View style={styles.dateBox}>
-                  <Text style={styles.dateLabel}>Check-out</Text>
-                  <Text style={styles.dateValue}>Nov 28, 2025</Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.applyButton}
-                onPress={() => setDateModalVisible(false)}
-              >
-                <Text style={styles.applyButtonText}>Apply Dates</Text>
-              </TouchableOpacity>
-            </ScrollView>
+            <Calendar
+              onDayPress={onDayPress}
+              minDate={new Date().toISOString().split('T')[0]}
+              theme={{
+                backgroundColor: colors.white,
+                calendarBackground: colors.white,
+                textSectionTitleColor: colors.primary,
+                selectedDayBackgroundColor: colors.primary,
+                selectedDayTextColor: colors.white,
+                todayTextColor: colors.primary,
+                arrowColor: colors.primary,
+              }}
+            />
           </View>
         </View>
       </Modal>

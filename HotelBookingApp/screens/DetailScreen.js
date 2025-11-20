@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,28 +8,93 @@ import {
   StyleSheet,
   Dimensions,
   SafeAreaView,
-  StatusBar,
-  Linking
+  Linking,
+  Modal,
 } from 'react-native';
-// import { Video } from 'expo-av';
-// import MapView, { Marker } from 'react-native-maps';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { MOCK_HOTELS } from '../data/mockData';
-import colors from '../constants/colors';
+import { Feather, MaterialCommunityIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
+import { transcribeAudio, callGeminiWithText } from '../services/GeminiService';
 
 const { width } = Dimensions.get('window');
 
 export default function DetailScreen({ route, navigation }) {
-  const { hotelId } = route.params;
-  const hotel = MOCK_HOTELS.find((h) => h.id === hotelId);
-  const [isPlaying, setIsPlaying] = React.useState(false);
+  // Get the hotel object passed from ListScreen
+  const { hotel } = route.params;
+  const [isLiked, setIsLiked] = useState(false);
+  const [showVirtualTour, setShowVirtualTour] = useState(false);
+  const [recording, setRecording] = useState();
+  const [isRecording, setIsRecording] = useState(false);
+  const [permissionResponse, requestPermission] = Audio.usePermissions();
+  const [geminiResponse, setGeminiResponse] = useState('');
 
-  if (!hotel) return null;
+  async function startRecording() {
+    try {
+      if (permissionResponse.status !== 'granted') {
+        console.log('Requesting permission..');
+        await requestPermission();
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      console.log('Starting recording..');
+      const { recording } = await Audio.Recording.createAsync( Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
+      );
+      setRecording(recording);
+      setIsRecording(true); // Toggle state
+      console.log('Recording started');
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  }
+
+  async function stopRecording() {
+    console.log('Stopping recording..');
+    setIsRecording(false); // Toggle state
+    setRecording(undefined);
+    await recording.stopAndUnloadAsync();
+    await Audio.setAudioModeAsync(
+      {
+        allowsRecordingIOS: false,
+      }
+    );
+    const uri = recording.getURI();
+    console.log('Recording stopped and stored at', uri);
+    
+    const transcription = await transcribeAudio(uri);
+    setGeminiResponse(`You said: ${transcription}`);
+
+    const response = await callGeminiWithText(transcription);
+    setGeminiResponse(response);
+    Speech.speak(response);
+    console.log('Gemini response:', response);
+  }
+
+  console.log('DetailScreen hotel:', hotel); // Debug log
+
+  if (!hotel) {
+    console.log('No hotel data found!');
+    return null;
+  }
+
+  const amenities = [
+    { icon: 'wifi', label: 'Free WiFi' },
+    { icon: 'coffee', label: 'Breakfast' },
+    { icon: 'dumbbell', label: 'Gym' },
+    { icon: 'car', label: 'Parking' },
+  ];
+
+  // Sample gallery images
+  const galleryImages = [
+    'https://images.unsplash.com/photo-1648766378129-11c3d8d0da05?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMHJvb20lMjBiZWR8ZW58MXx8fHwxNzYzNTY5NTQ0fDA&ixlib=rb-4.1.0&q=80&w=1080',
+    'https://images.unsplash.com/photo-1654355628827-860147b38be3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMj hob3RlbCUyMGxvYmJ5fGVufDF8fHx8MTc2MzUxMDU2NXww&ixlib=rb-4.1.0&q=80&w=1080',
+    'https://images.unsplash.com/photo-1723465308831-29da05e011f3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBob3RlbCUyMGV4dGVyaW9yfGVufDF8fHx8MTc2MzUzODAyN3ww&ixlib=rb-4.1.0&q=80&w=1080',
+  ];
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-
+    <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Hero Image Section */}
         <View style={styles.heroContainer}>
@@ -37,178 +102,210 @@ export default function DetailScreen({ route, navigation }) {
 
           {/* Top Controls */}
           <View style={styles.topControls}>
-            <TouchableOpacity style={styles.circleButton} onPress={() => navigation.goBack()}>
-              <Feather name="arrow-left" size={24} color="black" />
+            <TouchableOpacity
+              style={styles.circleButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Feather name="arrow-left" size={24} color="#0F172A" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.circleButton}>
-              <Feather name="heart" size={24} color="black" />
+            <TouchableOpacity
+              style={styles.circleButton}
+              onPress={() => setIsLiked(!isLiked)}
+            >
+              <FontAwesome
+                name={isLiked ? "heart" : "heart-o"}
+                size={20}
+                color={isLiked ? "#EF4444" : "#0F172A"}
+              />
             </TouchableOpacity>
           </View>
-
-          {/* Virtual Tour Floating Pill */}
-          <TouchableOpacity style={styles.virtualTourPill} onPress={() => setIsPlaying(!isPlaying)}>
-            <View style={styles.playIconContainer}>
-              <Ionicons name="play" size={20} color="white" />
-            </View>
-            <View>
-              <Text style={styles.vtText}>Watch Virtual Tour</Text>
-              <Text style={styles.vtSubText}>360° Interactive View</Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* Content Body */}
         <View style={styles.contentContainer}>
           {/* Header Info */}
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.hotelName}>{hotel.name}</Text>
-              <View style={styles.locationRow}>
-                <Feather name="map-pin" size={14} color={colors.textSecondary} />
-                <Text style={styles.locationText}>{hotel.location}</Text>
+          <View style={styles.headerSection}>
+            <View style={styles.headerRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hotelName}>{hotel.name}</Text>
+                <View style={styles.locationRow}>
+                  <Feather name="map-pin" size={16} color="#64748B" />
+                  <Text style={styles.locationText}>{hotel.location}</Text>
+                </View>
+              </View>
+              <View style={styles.ratingBadge}>
+                <FontAwesome name="star" size={16} color="#EAB308" />
+                <Text style={styles.ratingText}>{hotel.rating || '4.8'}</Text>
               </View>
             </View>
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.ratingText}>4.8</Text>
+
+            {/* Tags */}
+            <View style={styles.tagsRow}>
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>Beachfront</Text>
+              </View>
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>Luxury</Text>
+              </View>
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>Pool</Text>
+              </View>
             </View>
           </View>
 
-          {/* Tags */}
-          <View style={styles.tagsRow}>
-            {['Beachfront', 'Luxury', 'Pool'].map((tag, index) => (
-              <View key={index} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Virtual Tour Card */}
-          {/* {isPlaying && (
-            <View style={styles.videoCard}>
-               <Video
-                  style={styles.video}
-                  source={{ uri: 'https://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4' }}
-                  useNativeControls
-                  resizeMode="cover"
-                  isLooping
-                  shouldPlay={isPlaying}
-                />
+          {/* Virtual Tour Promo Card */}
+          <TouchableOpacity
+            style={styles.promoCard}
+            activeOpacity={0.9}
+            onPress={() => setShowVirtualTour(true)}
+          >
+            <Text style={styles.promoTitle}>Experience in 360°</Text>
+            <Text style={styles.promoText}>
+              Explore every corner of our resort with our immersive virtual tour
+            </Text>
+            <View style={styles.promoButton}>
+              <Ionicons name="play" size={20} color="#0F172A" style={{ marginRight: 8 }} />
+              <Text style={styles.promoButtonText}>Launch Virtual Tour</Text>
             </View>
-          )} */}
-          {isPlaying && <View style={styles.videoCard}><Text>Video Disabled</Text></View>}
-
-          {!isPlaying && (
-            <View style={styles.promoCard}>
-              <Text style={styles.promoTitle}>Experience in 360°</Text>
-              <Text style={styles.promoText}>
-                Explore every corner of our resort with our immersive virtual tour
-              </Text>
-              <TouchableOpacity style={styles.promoButton} onPress={() => setIsPlaying(true)}>
-                <Feather name="play-circle" size={20} color="#0A1931" />
-                <Text style={styles.promoButtonText}>Launch Virtual Tour</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          </TouchableOpacity>
 
           {/* Amenities */}
           <Text style={styles.sectionTitle}>Amenities</Text>
           <View style={styles.amenitiesGrid}>
-            {[
-              { icon: 'wifi', label: 'Free WiFi' },
-              { icon: 'coffee', label: 'Breakfast' },
-              { icon: 'dumbbell', label: 'Gym' },
-              { icon: 'car', label: 'Parking' },
-            ].map((item, index) => (
+            {amenities.map((amenity, index) => (
               <View key={index} style={styles.amenityBox}>
                 <View style={styles.amenityIconCircle}>
-                  <MaterialCommunityIcons name={item.icon} size={24} color="#0A1931" />
+                  <MaterialCommunityIcons name={amenity.icon} size={24} color="#0F172A" />
                 </View>
-                <Text style={styles.amenityLabel}>{item.label}</Text>
+                <Text style={styles.amenityLabel}>{amenity.label}</Text>
               </View>
             ))}
           </View>
 
           {/* About */}
           <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.description}>{hotel.description}</Text>
+          <Text style={styles.description}>
+            {hotel.description ||
+              `Experience luxury at its finest at ${hotel.name}. Located in ${hotel.location}, our resort offers breathtaking views, world-class amenities, and exceptional service. Each room is designed with comfort and elegance in mind, featuring modern furnishings and stunning vistas.`}
+          </Text>
+
+          {/* AI Assistant Response */}
+          {geminiResponse && (
+            <>
+              <Text style={styles.sectionTitle}>AI Assistant Response</Text>
+              <Text style={styles.description}>{geminiResponse}</Text>
+            </>
+          )}
 
           {/* Gallery */}
           <Text style={styles.sectionTitle}>Gallery</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryRow}>
-            {[hotel.image, hotel.image, hotel.image].map((img, index) => (
+          <View style={styles.galleryGrid}>
+            {galleryImages.map((img, index) => (
               <Image key={index} source={{ uri: img }} style={styles.galleryImage} />
             ))}
-          </ScrollView>
-
-          {/* Map Location */}
-          <Text style={styles.sectionTitle}>Location</Text>
-          <View style={styles.mapContainer}>
-            {/* <MapView
-              style={styles.map}
-              initialRegion={{
-                latitude: hotel.latitude || 37.78825,
-                longitude: hotel.longitude || -122.4324,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-            >
-              <Marker
-                coordinate={{
-                  latitude: hotel.latitude || 37.78825,
-                  longitude: hotel.longitude || -122.4324,
-                }}
-              />
-            </MapView> */}
-            <View style={styles.map}><Text>Map Disabled</Text></View>
           </View>
 
           {/* Contact */}
           <Text style={styles.sectionTitle}>Contact</Text>
-          <View style={styles.contactRow}>
-            <Feather name="phone" size={18} color="#0A1931" />
-            <Text style={styles.contactText}>+1 (305) 555-0123</Text>
-          </View>
-          <View style={styles.contactRow}>
-            <Feather name="mail" size={18} color="#0A1931" />
-            <Text style={styles.contactText}>info@oceanparadise.com</Text>
+          <View style={styles.contactSection}>
+            <TouchableOpacity style={styles.contactRow}>
+              <Feather name="phone" size={20} color="#0F172A" />
+              <Text style={styles.contactText}>+1 (305) 555-0123</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.contactRow}>
+              <Feather name="mail" size={20} color="#0F172A" />
+              <Text style={styles.contactText}>info@{hotel.name.toLowerCase().replace(/\s+/g, '')}.com</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={{ height: 100 }} />
+          {/* Bottom Spacing for Fixed Elements */}
+          <View style={{ height: 120 }} />
         </View>
       </ScrollView>
 
-      {/* Floating AI Button */}
-      <TouchableOpacity style={styles.aiButton} onPress={() => navigation.navigate('Chatbot')}>
-        <MaterialCommunityIcons name="microphone" size={24} color="white" />
-        <Text style={styles.aiButtonText}>AI Assistant</Text>
+      {/* Floating AI Assistant Button */}
+      <TouchableOpacity
+        style={[styles.aiButton, isRecording && styles.aiButtonRecording]}
+        onPress={isRecording ? stopRecording : startRecording}
+      >
+        <Feather name={isRecording ? "stop-circle" : "mic"} size={28} color="white" />
       </TouchableOpacity>
 
       {/* Bottom Bar */}
       <View style={styles.bottomBar}>
         <View>
           <Text style={styles.fromText}>From</Text>
-          <Text style={styles.priceText}>{hotel.price}</Text>
+          <Text style={styles.priceText}>${hotel.price || '289'}/night</Text>
         </View>
-        <TouchableOpacity style={styles.bookButton} onPress={() => Linking.openURL('https://hotels.com')}>
+        <TouchableOpacity
+          style={styles.bookButton}
+          onPress={() => Linking.openURL('https://hotels.com')}
+        >
           <Feather name="calendar" size={20} color="white" style={{ marginRight: 8 }} />
           <Text style={styles.bookButtonText}>Book Now</Text>
         </TouchableOpacity>
       </View>
-    </View>
+
+      {/* Virtual Tour Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showVirtualTour}
+        onRequestClose={() => setShowVirtualTour(false)}
+      >
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Virtual Tour - 360° View</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowVirtualTour(false)}
+              >
+                <Feather name="x" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Content */}
+            <View style={styles.modalContent}>
+              <View style={styles.tourVideoPlaceholder}>
+                <View style={styles.tourPlayIconLarge}>
+                  <Ionicons name="play" size={48} color="white" style={{ marginLeft: 4 }} />
+                </View>
+                <Text style={styles.tourPlaceholderTitle}>360° Virtual Tour</Text>
+                <Text style={styles.tourPlaceholderText}>Interactive video tour would play here</Text>
+              </View>
+
+              {/* Tour Options */}
+              <View style={styles.tourOptions}>
+                <TouchableOpacity style={styles.tourOptionActive}>
+                  <Text style={styles.tourOptionTextActive}>Lobby View</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tourOption}>
+                  <Text style={styles.tourOptionText}>Room View</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tourOption}>
+                  <Text style={styles.tourOptionText}>Pool Area</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
   },
   heroContainer: {
-    height: 350,
+    height: 320,
     position: 'relative',
   },
   heroImage: {
@@ -218,277 +315,383 @@ const styles = StyleSheet.create({
   topControls: {
     position: 'absolute',
     top: 50,
-    left: 20,
-    right: 20,
+    left: 24,
+    right: 24,
     flexDirection: 'row',
     justifyContent: 'space-between',
     zIndex: 10,
   },
   circleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'white',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  virtualTourPill: {
+  tourButtonContainer: {
     position: 'absolute',
-    top: '50%',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  virtualTourButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 30,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 30,
-    paddingRight: 24,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
   },
   playIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0A1931',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  vtText: {
-    fontWeight: 'bold',
-    color: '#0A1931',
-    fontSize: 14,
+  tourTextContainer: {
+    alignItems: 'flex-start',
   },
-  vtSubText: {
-    color: colors.textSecondary,
+  tourText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  tourSubText: {
     fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
   contentContainer: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    marginTop: -30,
-    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  headerSection: {
+    marginBottom: 24,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   hotelName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#0A1931',
-    marginBottom: 4,
+    color: '#0F172A',
+    marginBottom: 8,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   locationText: {
-    color: colors.textSecondary,
-    marginLeft: 4,
     fontSize: 14,
+    color: '#64748B',
+    marginLeft: 6,
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F6FA',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#0F172A10',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
   },
   ratingText: {
+    fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 4,
-    color: '#0A1931',
+    color: '#0F172A',
+    marginLeft: 6,
   },
   tagsRow: {
     flexDirection: 'row',
-    marginBottom: 24,
+    flexWrap: 'wrap',
+    marginTop: 8,
   },
   tag: {
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#0F172A10',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 12,
     marginRight: 8,
+    marginTop: 4,
   },
   tagText: {
-    color: '#0A1931',
     fontSize: 12,
     fontWeight: '600',
+    color: '#0F172A',
   },
   promoCard: {
-    backgroundColor: '#0A1931',
-    borderRadius: 20,
+    backgroundColor: '#0F172A',
+    borderRadius: 24,
     padding: 24,
-    marginBottom: 32,
-  },
-  videoCard: {
-    height: 200,
-    borderRadius: 20,
+    marginBottom: 24,
     overflow: 'hidden',
-    marginBottom: 32,
-    backgroundColor: 'black',
-  },
-  video: {
-    width: '100%',
-    height: '100%',
   },
   promoTitle: {
-    color: 'white',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   promoText: {
-    color: '#B0B8C1',
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
     marginBottom: 20,
     lineHeight: 20,
   },
   promoButton: {
-    backgroundColor: 'white',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
   },
   promoButtonText: {
-    color: '#0A1931',
+    fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 8,
+    color: '#0F172A',
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#0A1931',
+    color: '#0F172A',
     marginBottom: 16,
   },
   amenitiesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   amenityBox: {
     width: '48%',
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
     borderRadius: 16,
     padding: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  amenityIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F5F6FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  amenityLabel: {
-    color: '#0A1931',
-    fontWeight: '500',
-  },
-  description: {
-    color: colors.textSecondary,
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  galleryRow: {
-    marginBottom: 32,
-  },
-  galleryImage: {
-    width: 120,
-    height: 80,
-    borderRadius: 12,
-    marginRight: 12,
-  },
-  mapContainer: {
-    height: 200,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 32,
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
+  amenityIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0F172A10',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  amenityLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#0F172A',
+    flex: 1,
+  },
+  description: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  galleryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  galleryImage: {
+    width: (width - 72) / 3,
+    height: 96,
+    borderRadius: 16,
+  },
+  contactSection: {
+    marginBottom: 24,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   contactText: {
+    fontSize: 14,
+    color: '#64748B',
     marginLeft: 12,
-    color: colors.textSecondary,
-    fontSize: 16,
   },
   aiButton: {
     position: 'absolute',
-    bottom: 100,
-    right: 20,
-    backgroundColor: '#0A1931',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    bottom: 110,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#6366F1',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  aiButtonText: {
-    color: 'white',
-    fontSize: 8,
-    marginTop: 2,
+  aiButtonRecording: {
+    backgroundColor: '#EF4444', // A red color to indicate recording
   },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'white',
-    padding: 20,
-    paddingBottom: 30,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
   },
   fromText: {
-    color: colors.textSecondary,
     fontSize: 12,
+    color: '#64748B',
+    marginBottom: 4,
   },
-  priceText: {
-    color: '#0A1931',
+  priceText: {.
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#0F172A',
   },
   bookButton: {
-    backgroundColor: '#0A1931',
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 32,
-    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
   bookButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
     fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  modalContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  closeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  tourVideoPlaceholder: {
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    borderRadius: 24,
+    aspectRatio: 16 / 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    marginBottom: 24,
+  },
+  tourPlayIconLarge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  tourPlaceholderTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  tourPlaceholderText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  tourOptions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  tourOptionActive: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  tourOptionTextActive: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  tourOption: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  tourOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

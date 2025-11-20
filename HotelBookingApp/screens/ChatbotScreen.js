@@ -42,7 +42,7 @@ export default function ChatbotScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, messages]);
+  }, [input]);
 
   const renderMessage = ({ item }) => (
     <View style={[styles.messageBubble, item.role === 'user' ? styles.userMessage : styles.modelMessage]}>

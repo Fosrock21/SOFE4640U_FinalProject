@@ -97,7 +97,7 @@ export default function SearchScreen({ navigation }) {
               setLocation(`${city}, ${region}`);
             }
           } catch (error) {
-            setLocation("Current Location");
+            Alert.alert('Error', 'Could not determine your location. Please try again or enter it manually.');
           }
         }}>
           <Text style={[styles.inputText, { color: colors.white, textAlign: 'center' }]}>📍 Use My Current Location</Text>

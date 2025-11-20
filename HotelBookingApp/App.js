@@ -63,7 +63,7 @@ export default function App() {
             <Stack.Screen
               name="Details"
               component={DetailScreen}
-              options={{ title: 'Hotel Details' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Chatbot"
