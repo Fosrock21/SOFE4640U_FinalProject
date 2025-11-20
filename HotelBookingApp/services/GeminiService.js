@@ -1,8 +1,7 @@
+import { GEMINI_API_KEY, SPEECH_TO_TEXT_API_KEY } from '@env';
 import * as FileSystem from 'expo-file-system/legacy';
 
-const GEMINI_API_KEY = 'AIzaSyButG94nCT3q8TjsdEbTivagUMcsUgHVc0';
-const SPEECH_TO_TEXT_API_KEY = 'YOUR_SPEECH_TO_TEXT_API_KEY'; // Replace with your Speech-to-Text API key
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`;
 const SPEECH_TO_TEXT_API_URL = `https://speech.googleapis.com/v1/speech:recognize?key=${SPEECH_TO_TEXT_API_KEY}`;
 
 export const transcribeAudio = async (audioUri) => {
@@ -22,7 +21,7 @@ export const transcribeAudio = async (audioUri) => {
       },
       body: JSON.stringify({
         config: {
-          encoding: 'LINEAR16',
+          encoding: 'MP4',
           sampleRateHertz: 16000,
           languageCode: 'en-US',
         },

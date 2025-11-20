@@ -1,15 +1,24 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { 
+    FIREBASE_API_KEY, 
+    FIREBASE_AUTH_DOMAIN, 
+    FIREBASE_PROJECT_ID, 
+    FIREBASE_STORAGE_BUCKET, 
+    FIREBASE_MESSAGING_SENDER_ID, 
+    FIREBASE_APP_ID, 
+    FIREBASE_MEASUREMENT_ID 
+} from '@env';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyCgAfxWfGcwCblMok8zUz7nD-xJdEOF-9M",
-    authDomain: "hotelbookingapp-7ab17.firebaseapp.com",
-    projectId: "hotelbookingapp-7ab17",
-    storageBucket: "hotelbookingapp-7ab17.firebasestorage.app",
-    messagingSenderId: "762011472718",
-    appId: "1:762011472718:web:176d00af124a6d4d70041f",
-    measurementId: "G-H476ER89Z9"
+    apiKey: FIREBASE_API_KEY,
+    authDomain: FIREBASE_AUTH_DOMAIN,
+    projectId: FIREBASE_PROJECT_ID,
+    storageBucket: FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: FIREBASE_MESSAGING_SENDER_ID,
+    appId: FIREBASE_APP_ID,
+    measurementId: FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
